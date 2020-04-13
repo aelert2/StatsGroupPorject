@@ -28,10 +28,11 @@ Loading the libraries needed
 Background about the data
 =========================
 
-Our project covers[(NFL play-by-play data from 2009 to 2018 from
+Our project covers [NFL play-by-play data from 2009 to 2018 from
 Kaggle](https://www.kaggle.com/maxhorowitz/nflplaybyplay2009to2016), and
 we are using betting data from Kaggle (link to data here) to
-contextualize the play-by-play data. <br> The [extra point yard line was
+contextualize the play-by-play data. <br> <br> The [extra point yard
+line was
 moved](http://www.nfl.com/news/story/0ap3000000493347/article/nfl-moves-extra-point-to-15yard-line-for-2015-season)
 from the 2-yardline to the 15-yardline in 2015 because the NFL wanted to
 increase the number of 2-point conversion attempts to boast ratings. We

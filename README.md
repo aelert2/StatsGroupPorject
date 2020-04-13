@@ -42,6 +42,10 @@ the 4th quarter, can benefit teams.
 Data Cleaning
 =============
 
+[Follow this link for using an open source Git extension to deal with
+versioning large files.](https://git-lfs.github.com/) This is how we
+were able to load the large play-by-play dataset.
+
     nfl_data <- read_csv("NFLPlaybyPlay 2009-2018.csv")
 
     ## Parsed with column specification:

@@ -6,14 +6,14 @@ Loading the libraries needed
     library(data.table)
     library(tidyverse)
 
-    ## ── Attaching packages ───────────────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.0 ──
+    ## ── Attaching packages ───────────────────────────────────────────────── tidyverse 1.3.0 ──
 
     ## ✓ ggplot2 3.2.1     ✓ purrr   0.3.3
-    ## ✓ tibble  2.1.3     ✓ dplyr   0.8.4
+    ## ✓ tibble  2.1.3     ✓ dplyr   0.8.3
     ## ✓ tidyr   1.0.2     ✓ stringr 1.4.0
     ## ✓ readr   1.3.1     ✓ forcats 0.4.0
 
-    ## ── Conflicts ──────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+    ## ── Conflicts ──────────────────────────────────────────────────── tidyverse_conflicts() ──
     ## x dplyr::between()   masks data.table::between()
     ## x dplyr::filter()    masks stats::filter()
     ## x dplyr::first()     masks data.table::first()
@@ -44,7 +44,7 @@ Data Cleaning
 versioning large files.](https://git-lfs.github.com/) This is how we
 were able to load the large play-by-play dataset.
 
-    nfl_data <- read_csv("NFLPlaybyPlay 2009-2018.csv")
+    nfl_data <-  read_csv("NFLPlaybyPlay 2009-2018.csv")
 
     ## Parsed with column specification:
     ## cols(
@@ -104,6 +104,8 @@ were able to load the large play-by-play dataset.
              score_differential_post,
              desc,
              game_date,
+             qtr,
+             game_seconds_remaining,
              play_type,
              yards_gained,
              contains("two_point"),
@@ -118,7 +120,10 @@ were able to load the large play-by-play dataset.
              away_wp,
              wpa,
              home_wp_post,
-             away_wp_post) %>% 
+             away_wp_post,
+             ydsnet, 
+             ep, 
+             epa) %>% 
       mutate(year = substr(game_id, 1, 4)) %>%
       filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1) %>% filter(home_team != "JAC", away_team != "JAC")
 
@@ -126,9 +131,14 @@ were able to load the large play-by-play dataset.
     post_td_plays <- post_td_plays %>% left_join(spread_data, by = "newdate" )
     post_td_plays$home_team <- as.character(post_td_plays$home_team)
     post_td_plays$away_team <- as.character(post_td_plays$away_team)
-    post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
+    # post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
 
     post_td_plays <- post_td_plays %>% filter(home_team == team_favorite_id | away_team == team_favorite_id)
+
+    #Create one column that separates the types of extra point(s) try
+    post_td_plays <- post_td_plays %>% 
+      mutate(extra_point_type = ifelse(extra_point_attempt == 1,
+                                   "Kick", "Two-PointConversion"))
 
 
     # Ratio of XPT:2PT attempts
@@ -161,6 +171,19 @@ were able to load the large play-by-play dataset.
     ## 19 2018                    0                 1   111
     ## 20 2018                    1                 0  1009
 
+    #Mean WPA change based on play type for post-touchdown 
+    post_td_plays %>% 
+      group_by(play_type) %>% 
+      summarise(mean(wpa, na.rm = T))
+
+    ## # A tibble: 4 x 2
+    ##   play_type   `mean(wpa, na.rm = T)`
+    ##   <chr>                        <dbl>
+    ## 1 extra_point              -0.000687
+    ## 2 no_play                   0.00763 
+    ## 3 pass                     -0.0114  
+    ## 4 run                      -0.00217
+
 Data Visualization
 ==================
 
@@ -190,6 +213,28 @@ Data Visualization
 
 ![](README_files/figure-markdown_strict/unnamed-chunk-3-2.png)
 
+    #Graph 4th quarter win probability changes based on type of extra point try
+    post_td_plays %>% 
+      filter(qtr == 4) %>% 
+      ggplot(., aes(x=game_seconds_remaining, y=wpa, 
+                                     color=extra_point_type)) + geom_point() + scale_x_reverse() +
+      ggtitle("Win Probability Shifts in the 4th Quarter")
+
+    ## Warning: Removed 146 rows containing missing values (geom_point).
+
+![](README_files/figure-markdown_strict/unnamed-chunk-3-3.png)
+
+    #Graph 4th quarter, 7 minutes left win probability changes based on type of extra point try
+    post_td_plays %>% 
+      filter(qtr == 4, game_seconds_remaining <= 420) %>% 
+      ggplot(., aes(x=game_seconds_remaining, y=wpa, 
+                    color=extra_point_type)) + geom_point() + scale_x_reverse()  +
+      ggtitle("Win Probability Shifts in the last 7 min")
+
+    ## Warning: Removed 96 rows containing missing values (geom_point).
+
+![](README_files/figure-markdown_strict/unnamed-chunk-3-4.png)
+
 Data Modeling
 =============
 
@@ -208,3 +253,42 @@ Data Modeling
     #summary(post_td_plays)
 
     # mod1 <- lm(wpa ~ posteam + defteam + score_differential + play_type + two_point_attempt + two_point_conv_result + kicker_player_id + extra_point_attempt + extra_point_result + year, data = post_td_plays)
+
+    #Regression to see influential factors for two-point conversions specifcially
+    #Just a test, planning to further develop
+    lm_twopoint <- post_td_plays %>% 
+      filter(extra_point_type == "Two-PointConversion") %>% 
+      lm(wpa ~ game_seconds_remaining + ydsnet + posteam_score + defteam_score +
+           score_differential + extra_point_prob + two_point_conversion_prob + ep + epa, data = .)
+
+    summary(lm_twopoint)
+
+    ## 
+    ## Call:
+    ## lm(formula = wpa ~ game_seconds_remaining + ydsnet + posteam_score + 
+    ##     defteam_score + score_differential + extra_point_prob + two_point_conversion_prob + 
+    ##     ep + epa, data = .)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -0.55329 -0.01590  0.01095  0.02582  0.38174 
+    ## 
+    ## Coefficients: (3 not defined because of singularities)
+    ##                             Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)                4.663e-03  6.900e-02   0.068    0.946    
+    ## game_seconds_remaining     1.920e-05  4.176e-06   4.598 5.19e-06 ***
+    ## ydsnet                    -1.338e-04  1.126e-04  -1.189    0.235    
+    ## posteam_score             -4.080e-04  3.191e-04  -1.279    0.201    
+    ## defteam_score              6.313e-04  2.661e-04   2.372    0.018 *  
+    ## score_differential                NA         NA      NA       NA    
+    ## extra_point_prob                  NA         NA      NA       NA    
+    ## two_point_conversion_prob         NA         NA      NA       NA    
+    ## ep                        -2.526e-02  7.206e-02  -0.351    0.726    
+    ## epa                        3.494e-02  2.220e-03  15.738  < 2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.05458 on 609 degrees of freedom
+    ##   (13 observations deleted due to missingness)
+    ## Multiple R-squared:  0.3127, Adjusted R-squared:  0.306 
+    ## F-statistic: 46.19 on 6 and 609 DF,  p-value: < 2.2e-16

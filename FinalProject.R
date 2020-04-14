@@ -171,7 +171,7 @@ post_td_plays %>%
 
   
   #str(post_td_plays)
-  post_td_plays$posteam <- as.factor(post_td_plays$posteam)
+post_td_plays$posteam <- as.factor(post_td_plays$posteam)
 post_td_plays$defteam <- as.factor(post_td_plays$defteam)
 post_td_plays$play_type <- as.factor(post_td_plays$play_type)
 post_td_plays$two_point_attempt <- as.factor(post_td_plays$two_point_attempt)

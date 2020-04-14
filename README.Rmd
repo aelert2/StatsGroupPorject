@@ -24,7 +24,7 @@ The [extra point yard line was moved](http://www.nfl.com/news/story/0ap300000049
 # Data Cleaning
 [Follow this link for using an open source Git extension to deal with versioning large files.](https://git-lfs.github.com/) This is how we were able to load the large play-by-play dataset.
 ```{r}
-nfl_data <- read_csv("NFLPlaybyPlay 2009-2018.csv")
+nfl_data <-  read_csv("NFLPlaybyPlay 2009-2018.csv")
 spread_data = read.csv("spreadspoke_scores.csv")
 spread_data$newdate <- strptime((spread_data$schedule_date), "%m/%d/%Y")
 spread_data$newdate = format(spread_data$newdate, "%Y-%m-%d")
@@ -45,6 +45,8 @@ post_td_plays <- nfl_data %>%
          score_differential_post,
          desc,
          game_date,
+         qtr,
+         game_seconds_remaining,
          play_type,
          yards_gained,
          contains("two_point"),
@@ -59,7 +61,10 @@ post_td_plays <- nfl_data %>%
          away_wp,
          wpa,
          home_wp_post,
-         away_wp_post) %>% 
+         away_wp_post,
+         ydsnet, 
+         ep, 
+         epa) %>% 
   mutate(year = substr(game_id, 1, 4)) %>%
   filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1) %>% filter(home_team != "JAC", away_team != "JAC")
 
@@ -67,15 +72,25 @@ post_td_plays$newdate <- as.character(strptime(as.Date(post_td_plays$game_date),
 post_td_plays <- post_td_plays %>% left_join(spread_data, by = "newdate" )
 post_td_plays$home_team <- as.character(post_td_plays$home_team)
 post_td_plays$away_team <- as.character(post_td_plays$away_team)
-post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
+# post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
 
 post_td_plays <- post_td_plays %>% filter(home_team == team_favorite_id | away_team == team_favorite_id)
+
+#Create one column that separates the types of extra point(s) try
+post_td_plays <- post_td_plays %>% 
+  mutate(extra_point_type = ifelse(extra_point_attempt == 1,
+                               "Kick", "Two-PointConversion"))
 
 
 # Ratio of XPT:2PT attempts
 post_td_plays %>% 
   group_by(year, extra_point_attempt, two_point_attempt) %>% 
   summarise(n = n())
+
+#Mean WPA change based on play type for post-touchdown 
+post_td_plays %>% 
+  group_by(play_type) %>% 
+  summarise(mean(wpa, na.rm = T))
 
 ```
 
@@ -102,6 +117,20 @@ post_td_plays %>%
   geom_point(aes(color = extra_point_result)) +
   annotate(geom="text", x='2016', y=1100, label="2015: XPT moved from 2YL to 15YL", color="darkgray") +
   labs(title="Plot of Extra Points in the NFL from 2009 to 2018", x="Year", y = "Count")
+
+#Graph 4th quarter win probability changes based on type of extra point try
+post_td_plays %>% 
+  filter(qtr == 4) %>% 
+  ggplot(., aes(x=game_seconds_remaining, y=wpa, 
+                                 color=extra_point_type)) + geom_point() + scale_x_reverse() +
+  ggtitle("Win Probability Shifts in the 4th Quarter")
+
+#Graph 4th quarter, 7 minutes left win probability changes based on type of extra point try
+post_td_plays %>% 
+  filter(qtr == 4, game_seconds_remaining <= 420) %>% 
+  ggplot(., aes(x=game_seconds_remaining, y=wpa, 
+                color=extra_point_type)) + geom_point() + scale_x_reverse()  +
+  ggtitle("Win Probability Shifts in the last 7 min")
 ```
 
 # Data Modeling
@@ -122,6 +151,12 @@ post_td_plays$year <- as.factor(post_td_plays$year)
 
 # mod1 <- lm(wpa ~ posteam + defteam + score_differential + play_type + two_point_attempt + two_point_conv_result + kicker_player_id + extra_point_attempt + extra_point_result + year, data = post_td_plays)
 
+#Regression to see influential factors for two-point conversions specifcially
+#Just a test, planning to further develop
+lm_twopoint <- post_td_plays %>% 
+  filter(extra_point_type == "Two-PointConversion") %>% 
+  lm(wpa ~ game_seconds_remaining + ydsnet + posteam_score + defteam_score +
+       score_differential + extra_point_prob + two_point_conversion_prob + ep + epa, data = .)
 
-
+summary(lm_twopoint)
 ```

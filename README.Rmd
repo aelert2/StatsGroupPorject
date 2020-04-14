@@ -1,0 +1,113 @@
+---
+title: "README"
+author: "Amanda Elert"
+date: "4/13/2020"
+output: md_document
+---
+
+# Loading the libraries needed
+```{r}
+rm(list = ls())
+
+library(data.table)
+library(tidyverse)
+library(ggrepel)
+```
+
+# Background about the data
+Our project covers [NFL play-by-play data from 2009 to 2018 from Kaggle](https://www.kaggle.com/maxhorowitz/nflplaybyplay2009to2016), and we are using betting data from Kaggle (link to data here) to contextualize the play-by-play data.
+<br>
+<br>
+The [extra point yard line was moved](http://www.nfl.com/news/story/0ap3000000493347/article/nfl-moves-extra-point-to-15yard-line-for-2015-season
+) from the 2-yardline to the 15-yardline in 2015 because the NFL wanted to increase the number of 2-point conversion attempts to boast ratings. We want to analyze how attempting more 2-point conversions, especially in the 4th quarter, can benefit teams.
+
+# Data Cleaning
+[Follow this link for using an open source Git extension to deal with versioning large files.](https://git-lfs.github.com/) This is how we were able to load the large play-by-play dataset.
+```{r}
+nfl_data <- read_csv("NFLPlaybyPlay 2009-2018.csv")
+post_td_plays <- nfl_data %>% 
+  select(play_id,
+         game_id,
+         home_team,
+         away_team,
+         posteam,
+         posteam_type,
+         defteam,
+         posteam_score,
+         defteam_score,
+         score_differential,
+         posteam_score_post,
+         defteam_score_post,
+         score_differential_post,
+         desc,
+         play_type,
+         yards_gained,
+         contains("two_point"),
+         kicker_player_name,
+         kicker_player_id,
+         blocked_player_id,
+         blocked_player_name,
+         contains("extra_point"),
+         wp,
+         def_wp,
+         home_wp,
+         away_wp,
+         wpa,
+         home_wp_post,
+         away_wp_post) %>% 
+  mutate(year = substr(game_id, 1, 4)) %>%
+  filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1)
+
+# Ratio of XPT:2PT attempts
+post_td_plays %>% 
+  group_by(year, extra_point_attempt, two_point_attempt) %>% 
+  summarise(n = n())
+
+```
+
+# Data Visualization
+```{r}
+# 2-pt Conversion Distribution
+post_td_plays %>% 
+  filter(two_point_attempt == 1) %>% 
+  group_by(year, two_point_conv_result) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = year, y = n, group = two_point_conv_result)) +
+  geom_line(aes(color = two_point_conv_result)) +
+  geom_point(aes(color = two_point_conv_result)) +
+  annotate(geom="text", x='2016', y=49, label="2015: XPT moved from 2YL to 15YL", color="darkgray") +
+  labs(title="Plot of 2-pt Conversions in the NFL from 2009 to 2018",x="Year", y = "Count")
+
+# XPT Conversion Distribution
+post_td_plays %>% 
+  filter(extra_point_attempt == 1) %>% 
+  group_by(year, extra_point_result) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = year, y = n, group = extra_point_result)) +
+  geom_line(aes(color = extra_point_result)) +
+  geom_point(aes(color = extra_point_result)) +
+  annotate(geom="text", x='2016', y=1100, label="2015: XPT moved from 2YL to 15YL", color="darkgray") +
+  labs(title="Plot of Extra Points in the NFL from 2009 to 2018", x="Year", y = "Count")
+```
+
+# Data Modeling
+```{r}
+#str(post_td_plays)
+post_td_plays$posteam <- as.factor(post_td_plays$posteam)
+post_td_plays$defteam <- as.factor(post_td_plays$defteam)
+post_td_plays$play_type <- as.factor(post_td_plays$play_type)
+post_td_plays$two_point_attempt <- as.factor(post_td_plays$two_point_attempt)
+post_td_plays$two_point_conv_result <- as.factor(post_td_plays$two_point_conv_result)
+post_td_plays$kicker_player_id <- as.factor(post_td_plays$kicker_player_id)
+post_td_plays$extra_point_attempt <- as.factor(post_td_plays$extra_point_attempt)
+post_td_plays$extra_point_result <- as.factor(post_td_plays$extra_point_result)
+post_td_plays$year <- as.factor(post_td_plays$year)
+
+#str(post_td_plays)
+#summary(post_td_plays)
+
+# mod1 <- lm(wpa ~ posteam + defteam + score_differential + play_type + two_point_attempt + two_point_conv_result + kicker_player_id + extra_point_attempt + extra_point_result + year, data = post_td_plays)
+
+
+
+```

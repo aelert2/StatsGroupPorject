@@ -47,7 +47,12 @@ versioning large files.](https://git-lfs.github.com/) This is how we
 were able to load the large play-by-play dataset.
 
     nfl_data <- read_csv("NFLPlaybyPlay 2009-2018.csv")
-
+    spread_data = read.csv("spreadspoke_scores.csv")
+    spread_data$newdate <- strptime((spread_data$schedule_date), "%m/%d/%Y")
+    format(spread_data$newdate, "%Y-%m-%d")
+    spread_data$newdate = as.character(spread_data$newdate)
+    
+    
     ## Parsed with column specification:
     ## cols(
     ##   .default = col_double(),
@@ -96,6 +101,7 @@ were able to load the large play-by-play dataset.
              defteam,
              posteam_score,
              defteam_score,
+             game_date,
              score_differential,
              posteam_score_post,
              defteam_score_post,
@@ -117,7 +123,16 @@ were able to load the large play-by-play dataset.
              home_wp_post,
              away_wp_post) %>% 
       mutate(year = substr(game_id, 1, 4)) %>%
-      filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1)
+      filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1) %>% filter(home_team != "JAC", away_team != "JAC")
+      
+      post_td_plays$newdate <- as.character(strptime(as.Date(post_td_plays$game_date), "%Y-%m-%d"))        
+      post_td_plays <- post_td_plays %>% left_join(spread_data, by = "newdate" )
+      post_td_plays$home_team <- as.character(post_td_plays$home_team)
+      post_td_plays$away_team <- as.character(post_td_plays$away_team)
+      post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
+      
+      post_td_plays <- post_td_plays %>% filter(home_team == team_favorite_id | away_team == team_favorite_id)
+
 
     # Ratio of XPT:2PT attempts
     post_td_plays %>% 

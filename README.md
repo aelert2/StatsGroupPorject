@@ -6,16 +6,14 @@ Loading the libraries needed
     library(data.table)
     library(tidyverse)
 
-    ## ── Attaching packages ───────────────────────────── tidyverse 1.3.0 ──
+    ## ── Attaching packages ───────────────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.0 ──
 
-    ## ✓ ggplot2 3.3.0     ✓ purrr   0.3.3
-    ## ✓ tibble  3.0.0     ✓ dplyr   0.8.5
+    ## ✓ ggplot2 3.2.1     ✓ purrr   0.3.3
+    ## ✓ tibble  2.1.3     ✓ dplyr   0.8.4
     ## ✓ tidyr   1.0.2     ✓ stringr 1.4.0
     ## ✓ readr   1.3.1     ✓ forcats 0.4.0
 
-    ## Warning: package 'tibble' was built under R version 3.6.2
-
-    ## ── Conflicts ──────────────────────────────── tidyverse_conflicts() ──
+    ## ── Conflicts ──────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
     ## x dplyr::between()   masks data.table::between()
     ## x dplyr::filter()    masks stats::filter()
     ## x dplyr::first()     masks data.table::first()
@@ -47,12 +45,7 @@ versioning large files.](https://git-lfs.github.com/) This is how we
 were able to load the large play-by-play dataset.
 
     nfl_data <- read_csv("NFLPlaybyPlay 2009-2018.csv")
-    spread_data = read.csv("spreadspoke_scores.csv")
-    spread_data$newdate <- strptime((spread_data$schedule_date), "%m/%d/%Y")
-    format(spread_data$newdate, "%Y-%m-%d")
-    spread_data$newdate = as.character(spread_data$newdate)
-    
-    
+
     ## Parsed with column specification:
     ## cols(
     ##   .default = col_double(),
@@ -91,6 +84,10 @@ were able to load the large play-by-play dataset.
     ## .... .................................. .................. ........... .............................
     ## See problems(...) for more details.
 
+    spread_data = read.csv("spreadspoke_scores.csv")
+    spread_data$newdate <- strptime((spread_data$schedule_date), "%m/%d/%Y")
+    spread_data$newdate = format(spread_data$newdate, "%Y-%m-%d")
+    spread_data$newdate = as.character(spread_data$newdate)
     post_td_plays <- nfl_data %>% 
       select(play_id,
              game_id,
@@ -101,12 +98,12 @@ were able to load the large play-by-play dataset.
              defteam,
              posteam_score,
              defteam_score,
-             game_date,
              score_differential,
              posteam_score_post,
              defteam_score_post,
              score_differential_post,
              desc,
+             game_date,
              play_type,
              yards_gained,
              contains("two_point"),
@@ -124,14 +121,14 @@ were able to load the large play-by-play dataset.
              away_wp_post) %>% 
       mutate(year = substr(game_id, 1, 4)) %>%
       filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1) %>% filter(home_team != "JAC", away_team != "JAC")
-      
-      post_td_plays$newdate <- as.character(strptime(as.Date(post_td_plays$game_date), "%Y-%m-%d"))        
-      post_td_plays <- post_td_plays %>% left_join(spread_data, by = "newdate" )
-      post_td_plays$home_team <- as.character(post_td_plays$home_team)
-      post_td_plays$away_team <- as.character(post_td_plays$away_team)
-      post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
-      
-      post_td_plays <- post_td_plays %>% filter(home_team == team_favorite_id | away_team == team_favorite_id)
+
+    post_td_plays$newdate <- as.character(strptime(as.Date(post_td_plays$game_date), "%Y-%m-%d"))        
+    post_td_plays <- post_td_plays %>% left_join(spread_data, by = "newdate" )
+    post_td_plays$home_team <- as.character(post_td_plays$home_team)
+    post_td_plays$away_team <- as.character(post_td_plays$away_team)
+    post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
+
+    post_td_plays <- post_td_plays %>% filter(home_team == team_favorite_id | away_team == team_favorite_id)
 
 
     # Ratio of XPT:2PT attempts
@@ -143,26 +140,26 @@ were able to load the large play-by-play dataset.
     ## # Groups:   year, extra_point_attempt [20]
     ##    year  extra_point_attempt two_point_attempt     n
     ##    <chr>               <dbl>             <dbl> <int>
-    ##  1 2009                    0                 1    55
-    ##  2 2009                    1                 0  1030
-    ##  3 2010                    0                 1    46
-    ##  4 2010                    1                 0  1138
-    ##  5 2011                    0                 1    45
-    ##  6 2011                    1                 0  1097
-    ##  7 2012                    0                 1    54
-    ##  8 2012                    1                 0  1193
-    ##  9 2013                    0                 1    66
-    ## 10 2013                    1                 0  1153
-    ## 11 2014                    0                 1    55
-    ## 12 2014                    1                 0  1137
-    ## 13 2015                    0                 1    84
-    ## 14 2015                    1                 0  1059
-    ## 15 2016                    0                 1    93
-    ## 16 2016                    1                 0  1125
-    ## 17 2017                    0                 1    78
-    ## 18 2017                    1                 0  1126
-    ## 19 2018                    0                 1   120
-    ## 20 2018                    1                 0  1092
+    ##  1 2009                    0                 1    45
+    ##  2 2009                    1                 0   918
+    ##  3 2010                    0                 1    40
+    ##  4 2010                    1                 0   968
+    ##  5 2011                    0                 1    40
+    ##  6 2011                    1                 0   986
+    ##  7 2012                    0                 1    43
+    ##  8 2012                    1                 0  1088
+    ##  9 2013                    0                 1    63
+    ## 10 2013                    1                 0  1042
+    ## 11 2014                    0                 1    51
+    ## 12 2014                    1                 0  1035
+    ## 13 2015                    0                 1    68
+    ## 14 2015                    1                 0   920
+    ## 15 2016                    0                 1    91
+    ## 16 2016                    1                 0  1052
+    ## 17 2017                    0                 1    77
+    ## 18 2017                    1                 0  1062
+    ## 19 2018                    0                 1   111
+    ## 20 2018                    1                 0  1009
 
 Data Visualization
 ==================

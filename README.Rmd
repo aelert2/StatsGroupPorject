@@ -28,7 +28,54 @@ nfl_data <-  read_csv("NFLPlaybyPlay 2009-2018.csv")
 spread_data = read.csv("spreadspoke_scores.csv")
 spread_data$newdate <- strptime((spread_data$schedule_date), "%m/%d/%Y")
 spread_data$newdate = format(spread_data$newdate, "%Y-%m-%d")
-spread_data$newdate = as.character(spread_data$newdate)
+spread_data$newdate = as.Date(as.character(spread_data$newdate))
+
+spread_data$home_team_abbv <- ifelse(spread_data$team_home=="Arizona Cardinals", "ARI",
+                                     ifelse(spread_data$team_home=="Atlanta Falcons", "ATL", 
+                                            ifelse(spread_data$team_home=="Baltimore Ravens", "BAL",
+                                                   ifelse(spread_data$team_home=="Buffalo Bills", "BUF",
+                                                          ifelse(spread_data$team_home=="Carolina Panthers", "CAR",
+                              ifelse(spread_data$team_home=="Chicago Bears", "CHI",
+                                      ifelse(spread_data$team_home=="Cincinnati Bengals", "CIN",
+                                            ifelse(spread_data$team_home=="Cleveland Browns", "CLE",
+                                                   ifelse(spread_data$team_home=="Dallas Cowboys", "DAL",
+                                                          ifelse(spread_data$team_home=="Denver Broncos", "DEN", 
+                              ifelse(spread_data$team_home=="Detroit Lions", "DET",
+                                     ifelse(spread_data$team_home=="Green Bay Packers", "GB",
+                                            ifelse(spread_data$team_home=="Houston Texans", "HOU",
+                                                   ifelse(spread_data$team_home=="Indianapolis Colts", "IND",
+                              ifelse(spread_data$team_home=="Jacksonville Jaguars", "JAX",
+                                     ifelse(spread_data$team_home=="Kansas City Chiefs", "KC",
+                                            ifelse(spread_data$team_home=="Los Angeles Rams", "LA",
+                                                   ifelse(spread_data$team_home=="Los Angeles Chargers", "LAC",
+                              ifelse(spread_data$team_home=="Miami Dolphins", "MIA",
+                                     ifelse(spread_data$team_home=="Minnesota Vikings", "MIN",
+                                            ifelse(spread_data$team_home=="New England Patriots", "NE",
+                                                ifelse(spread_data$team_home=="New Orleans Saints", "NO",
+                              ifelse(spread_data$team_home=="New York Giants", "NYG",
+                                     ifelse(spread_data$team_home=="New York Jets", "NYJ",
+                                            ifelse(spread_data$team_home=="Oakland Raiders", "OAK",
+                                                   ifelse(spread_data$team_home=="Philadelphia Eagles", "PHI",
+                              ifelse(spread_data$team_home=="Pittsburgh Steelers", "PIT",
+                                     ifelse(spread_data$team_home=="San Diego Chargers", "SD",
+                                            ifelse(spread_data$team_home=="Seattle Seahawks", "SEA",
+                              ifelse(spread_data$team_home=="San Francisco 49ers", "SF",
+                                     ifelse(spread_data$team_home=="St. Louis Rams", "STL",
+                                            ifelse(spread_data$team_home=="Tampa Bay Buccaneers", "TB",
+                              ifelse(spread_data$team_home=="Tennessee Titans", "TEN",
+                                     ifelse(spread_data$team_home=="Washington Redskins", "WAS", "NA"
+                                            ))))))))))))))))))))))))))))))))))
+
+#Jacksonville's abbreviation changed from JAC to JAX in 2013
+nfl_data$home_team <- ifelse(nfl_data$home_team == "JAC", "JAX", nfl_data$home_team)
+
+colnames(spread_data)[19] <- "home_team"
+colnames(spread_data)[18] <- "game_date"
+glimpse(spread_data)
+
+nfl_data <- nfl_data %>% 
+                left_join(spread_data, by=c("game_date", "home_team"))
+
 post_td_plays <- nfl_data %>% 
   select(play_id,
          game_id,
@@ -64,17 +111,24 @@ post_td_plays <- nfl_data %>%
          away_wp_post,
          ydsnet, 
          ep, 
-         epa) %>% 
+         epa,
+         shotgun,
+         qb_dropback,
+         team_favorite_id, 
+         spread_favorite, 
+         over_under_line, 
+         stadium,
+         stadium_neutral, 
+         weather_temperature,
+         weather_wind_mph,
+         weather_humidity,
+         weather_detail)%>% 
   mutate(year = substr(game_id, 1, 4)) %>%
-  filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1) %>% filter(home_team != "JAC", away_team != "JAC")
+  filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1)
 
-post_td_plays$newdate <- as.character(strptime(as.Date(post_td_plays$game_date), "%Y-%m-%d"))        
-post_td_plays <- post_td_plays %>% left_join(spread_data, by = "newdate" )
-post_td_plays$home_team <- as.character(post_td_plays$home_team)
-post_td_plays$away_team <- as.character(post_td_plays$away_team)
-# post_td_plays$team_favorite_id <- as.character(post_td_plays$team_favorite_id)
-
-post_td_plays <- post_td_plays %>% filter(home_team == team_favorite_id | away_team == team_favorite_id)
+post_td_plays$home_team <- as.factor(as.character(post_td_plays$home_team))
+post_td_plays$away_team <- as.factor(as.character(post_td_plays$away_team))
+post_td_plays$team_favorite_id <- as.factor(as.character(post_td_plays$team_favorite_id))
 
 #Create one column that separates the types of extra point(s) try
 post_td_plays <- post_td_plays %>% 
@@ -145,8 +199,10 @@ post_td_plays$kicker_player_id <- as.factor(post_td_plays$kicker_player_id)
 post_td_plays$extra_point_attempt <- as.factor(post_td_plays$extra_point_attempt)
 post_td_plays$extra_point_result <- as.factor(post_td_plays$extra_point_result)
 post_td_plays$year <- as.factor(post_td_plays$year)
+post_td_plays$shotgun <- as.factor(as.character(post_td_plays$shotgun))
+post_td_plays$qb_dropback <- as.factor(as.character(post_td_plays$qb_dropback))
 
-#str(post_td_plays)
+glimpse(nfl_data)
 #summary(post_td_plays)
 
 # mod1 <- lm(wpa ~ posteam + defteam + score_differential + play_type + two_point_attempt + two_point_conv_result + kicker_player_id + extra_point_attempt + extra_point_result + year, data = post_td_plays)
@@ -155,8 +211,6 @@ post_td_plays$year <- as.factor(post_td_plays$year)
 #Just a test, planning to further develop
 lm_twopoint <- post_td_plays %>% 
   filter(extra_point_type == "Two-PointConversion") %>% 
-  lm(wpa ~ game_seconds_remaining + ydsnet + posteam_score + defteam_score +
-       score_differential + extra_point_prob + two_point_conversion_prob + ep + epa, data = .)
-
+  lm(wpa ~ posteam + defteam + game_seconds_remaining + ydsnet + score_differential + epa, data = .)
 summary(lm_twopoint)
 ```

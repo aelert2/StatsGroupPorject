@@ -12,6 +12,7 @@ rm(list = ls())
 library(data.table)
 library(tidyverse)
 library(ggrepel)
+library(broom)
 ```
 
 # Background about the data
@@ -135,6 +136,25 @@ post_td_plays <- post_td_plays %>%
   mutate(extra_point_type = ifelse(extra_point_attempt == 1,
                                "Kick", "Two-PointConversion"))
 
+#str(post_td_plays)
+post_td_plays$posteam <- as.factor(post_td_plays$posteam)
+post_td_plays$defteam <- as.factor(post_td_plays$defteam)
+post_td_plays$play_type <- as.factor(post_td_plays$play_type)
+post_td_plays$two_point_attempt <- as.factor(post_td_plays$two_point_attempt)
+post_td_plays$two_point_conv_result <- as.factor(post_td_plays$two_point_conv_result)
+post_td_plays$kicker_player_id <- as.factor(post_td_plays$kicker_player_id)
+post_td_plays$extra_point_attempt <- as.factor(post_td_plays$extra_point_attempt)
+post_td_plays$extra_point_result <- as.factor(post_td_plays$extra_point_result)
+post_td_plays$year <- as.factor(post_td_plays$year)
+post_td_plays$weather_humidity <- as.numeric(as.character(post_td_plays$weather_humidity))
+glimpse(post_td_plays)
+
+#Dropping the no_play play type from the data...it's all penalties
+post_td_plays <- post_td_plays %>% 
+  filter(play_type != "no_play")
+```
+
+```{r}
 
 # Ratio of XPT:2PT attempts
 post_td_plays %>% 
@@ -145,7 +165,6 @@ post_td_plays %>%
 post_td_plays %>% 
   group_by(play_type) %>% 
   summarise(mean(wpa, na.rm = T))
-
 ```
 
 # Data Visualization
@@ -189,28 +208,377 @@ post_td_plays %>%
 
 # Data Modeling
 ```{r}
-#str(post_td_plays)
-post_td_plays$posteam <- as.factor(post_td_plays$posteam)
-post_td_plays$defteam <- as.factor(post_td_plays$defteam)
-post_td_plays$play_type <- as.factor(post_td_plays$play_type)
-post_td_plays$two_point_attempt <- as.factor(post_td_plays$two_point_attempt)
-post_td_plays$two_point_conv_result <- as.factor(post_td_plays$two_point_conv_result)
-post_td_plays$kicker_player_id <- as.factor(post_td_plays$kicker_player_id)
-post_td_plays$extra_point_attempt <- as.factor(post_td_plays$extra_point_attempt)
-post_td_plays$extra_point_result <- as.factor(post_td_plays$extra_point_result)
-post_td_plays$year <- as.factor(post_td_plays$year)
-post_td_plays$shotgun <- as.factor(as.character(post_td_plays$shotgun))
-post_td_plays$qb_dropback <- as.factor(as.character(post_td_plays$qb_dropback))
-
-glimpse(nfl_data)
-#summary(post_td_plays)
-
 # mod1 <- lm(wpa ~ posteam + defteam + score_differential + play_type + two_point_attempt + two_point_conv_result + kicker_player_id + extra_point_attempt + extra_point_result + year, data = post_td_plays)
 
 #Regression to see influential factors for two-point conversions specifcially
 #Just a test, planning to further develop
 lm_twopoint <- post_td_plays %>% 
-  filter(extra_point_type == "Two-PointConversion") %>% 
-  lm(wpa ~ posteam + defteam + game_seconds_remaining + ydsnet + score_differential + epa, data = .)
+  lm(wp ~ game_seconds_remaining + score_differential + extra_point_type + weather_temperature + spread_favorite + over_under_line, data = .)
+
 summary(lm_twopoint)
+```
+
+```{r}
+#Success Rate of Extra Points (2015 and forward)
+post_td_plays %>% 
+  filter(extra_point_type == "Kick",
+         year == "2015" | year == "2016" | year == "2017" | year == "2018") %>% 
+  summarise(Extra_Point_Success = mean(extra_point_result == "good"))
+
+#.9407 success rate
+
+#Success Rate of Two Points
+post_td_plays %>% 
+  filter(extra_point_type == "Two-PointConversion") %>% 
+  summarise(Two_Point_Success = mean(two_point_conv_result == "success"))
+#.47345 success rate
+```
+```{r}
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -15, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down15 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -15, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down15 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 14, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -14, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down14 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 14, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -14, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down14 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 13, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -13, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down13 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 13, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -13, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down13 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -12, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down12 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -12, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down12 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 11, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -11, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down11 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 11, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -11, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down11 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 10, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -10, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down10 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 10, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -10, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down10 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 9, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -9, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down9 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 9, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -9, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down9 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 8, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -8, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down8 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 8, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -8, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down8 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 7, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -7, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down7 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 7, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -7, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down7 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 6, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -6, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down6 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 6, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -6, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down6 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 5, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -5, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down5 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 5, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -5, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down5 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 4, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -4, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down4 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 4, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -4, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down4 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 3, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -3, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down3 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 3, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -3, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down3 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 2, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -2, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down2 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 2, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -2, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down2 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 1, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -1, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_down1 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, down 1, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -1, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_down1 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, tied, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 0, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_tied <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, tied, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 0, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_tied <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 1, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 1, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up1 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 1, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 1, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up1 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 2, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 2, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up2 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 2, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 2, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up2 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 3, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 3, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up3 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 3, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 3, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up3 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 4, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 4, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up4 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 4, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 4, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up4 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 5, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 5, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up5 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 5, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 5, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up5 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 6, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 6, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up6 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 6, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 6, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up6 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 7, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 7, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up7 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 7, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 7, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up7 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 8, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 8, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up8 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 8, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 8, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up8 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 9, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 9, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up9 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 9, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 9, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up9 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 10, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 10, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up10 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 10, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 10, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up10 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 11, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 11, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up11 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 10, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 11, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up11 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 12, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up12 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 12, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 12, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up12 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 13, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 13, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up13 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 13, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 13, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up13 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 14, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 14, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up14 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 14, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 14, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up14 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 15, extra_point_type = "Kick", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+kick_up15 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+#10 minutes left, up 14, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 15, extra_point_type = "Two-PointConversion", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+twopt_up15 <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+kick_wps <- rbind(kick_down15, kick_down14, kick_down13, kick_down12, kick_down11, kick_down10, 
+                  kick_down9, kick_down8, kick_down7,kick_down6, kick_down5, kick_down4, kick_down3,
+                  kick_down2, kick_down1, kick_tied, kick_up1, kick_up2, kick_up3, kick_up4, kick_up5,
+                  kick_up6, kick_up7, kick_up8, kick_up9, kick_up10, kick_up11, kick_up12, kick_up13,
+                  kick_up14, kick_up15)
+
+twopt_wps <- rbind(twopt_down15, twopt_down14, twopt_down13, twopt_down12, twopt_down11, twopt_down10, 
+                   twopt_down9, twopt_down8, twopt_down7, twopt_down6, twopt_down5, twopt_down4,
+                   twopt_down3, twopt_down2, twopt_down1, twopt_tied, twopt_up1, twopt_up2, twopt_up3,
+                   twopt_up4, twopt_up5, twopt_up6, twopt_up7, twopt_up8, twopt_up9, twopt_up10, 
+                   twopt_up11, twopt_up12, twopt_up13, twopt_up14, twopt_up15)
+
+wp_shifts <- cbind.data.frame(kick_wps, twopt_wps)                
+```
+
+```{r}
+# create new data frame with predictive data
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -4, play_type = "extra_point", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
+
+# make predictions on wpa shift from going for 2pt
+sims <- predict(lm_twopoint, newdata = hypothetical_situation)
+
+mean(sims$.fitted)
+#Expected to drop win probability by -0.00766
+```
+
+```{r}
+#Finding some examples of game situations
+post_td_plays %>% 
+  filter(extra_point_type == "Two-PointConversion") %>% 
+  arrange(wpa)
+
+#2013-10-06 Cowboys vs Broncos, Cowboys 2pt Conversion 818 seconds remaining
+cowboys_broncos_1006_2013 <- nfl_data %>% 
+  filter(game_date == "2013-10-06", 
+         home_team == "DAL")
+#2011-11-20 Lions vs Panthers, Panthers 2pt Conversion 299 seconds remaining
+lions_panthers_1120_2011 <- nfl_data %>% 
+  filter(game_date == "2011-11-20", 
+         home_team == "DET")
+
+#2015-09-20 Bengals vs Chargers, Chargers 2pt Conversion Fails 260 seconds remaining
+bengals_chargers_0920_2015 <- nfl_data %>% 
+  filter(game_date == "2015-09-20", 
+         home_team == "CIN")
+#2017-10-29 Saints vs Bears, Bears 2pt Conversion Fails 238 seconds remaining
+saints_bears_1029_2017 <- nfl_data %>% 
+  filter(game_date == "2017-10-29", 
+         home_team == "NO")
+
+#Table showing between 210 and 270 seconds remaining, what coaches have done and how often successful
+post_td_plays %>% 
+  filter(game_seconds_remaining >=210 & game_seconds_remaining <= 270)
+
+ggplot(saints_bears_1029_2017, aes(x=game_seconds_remaining, y=away_wp)) + geom_line() + xlim(0,300)
+
+```
+
+```{r}
+library(shiny)
+
+# User interface ----
+ui <- fluidPage(
+  titlePanel("NFL Two Point Conversions"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      helpText("YOu're the coach, choose what to do in several real NFL game situations"),
+      
+      selectInput("var", 
+                  label = "Choose game",
+                  choices = c("Percent White", "Percent Black",
+                              "Percent Hispanic", "Percent Asian"),
+                  selected = "Percent White"),
+      
+      sliderInput("range", 
+                  label = "Range of interest:",
+                  min = 0, max = 100, value = c(0, 100))
+    ),
+    
+    mainPanel(plotOutput("map"))
+  )
+)
+
+# Server logic ----
+server <- function(input, output) {
+  output$map <- renderPlot({
+    data <- switch(input$var,
+                   "Percent White" = counties$white,
+                   "Percent Black" = counties$black,
+                   "Percent Hispanic" = counties$hispanic,
+                   "Percent Asian" = counties$asian)
+    
+    percent_map(var = data, color = "dodgerblue", legend.title = "Racial Makeup of the US by county", max = 100, min  = 0)
+  })
+}
+
+# Run app ----
+shinyApp(ui, server)
 ```

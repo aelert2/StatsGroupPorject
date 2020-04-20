@@ -498,17 +498,6 @@ wp_shifts <- cbind.data.frame(kick_wps, twopt_wps)
 ```
 
 ```{r}
-# create new data frame with predictive data
-hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -4, play_type = "extra_point", weather_temperature = 60, spread_favorite = -6, over_under_line = 30)
-
-# make predictions on wpa shift from going for 2pt
-sims <- predict(lm_twopoint, newdata = hypothetical_situation)
-
-mean(sims$.fitted)
-#Expected to drop win probability by -0.00766
-```
-
-```{r}
 #Finding some examples of game situations
 post_td_plays %>% 
   filter(extra_point_type == "Two-PointConversion") %>% 
@@ -538,47 +527,4 @@ post_td_plays %>%
 
 ggplot(saints_bears_1029_2017, aes(x=game_seconds_remaining, y=away_wp)) + geom_line() + xlim(0,300)
 
-```
-
-```{r}
-library(shiny)
-
-# User interface ----
-ui <- fluidPage(
-  titlePanel("NFL Two Point Conversions"),
-  
-  sidebarLayout(
-    sidebarPanel(
-      helpText("YOu're the coach, choose what to do in several real NFL game situations"),
-      
-      selectInput("var", 
-                  label = "Choose game",
-                  choices = c("Percent White", "Percent Black",
-                              "Percent Hispanic", "Percent Asian"),
-                  selected = "Percent White"),
-      
-      sliderInput("range", 
-                  label = "Range of interest:",
-                  min = 0, max = 100, value = c(0, 100))
-    ),
-    
-    mainPanel(plotOutput("map"))
-  )
-)
-
-# Server logic ----
-server <- function(input, output) {
-  output$map <- renderPlot({
-    data <- switch(input$var,
-                   "Percent White" = counties$white,
-                   "Percent Black" = counties$black,
-                   "Percent Hispanic" = counties$hispanic,
-                   "Percent Asian" = counties$asian)
-    
-    percent_map(var = data, color = "dodgerblue", legend.title = "Racial Makeup of the US by county", max = 100, min  = 0)
-  })
-}
-
-# Run app ----
-shinyApp(ui, server)
 ```

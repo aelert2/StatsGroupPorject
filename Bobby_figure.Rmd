@@ -1,0 +1,514 @@
+---
+title: "README"
+author: "Amanda Elert"
+date: "4/13/2020"
+output: md_document
+---
+
+# Loading the libraries needed
+```{r}
+rm(list = ls())
+
+library(data.table)
+library(tidyverse)
+library(ggrepel)
+library(broom)
+library(randomForest)
+```
+
+# Background about the data
+Our project covers [NFL play-by-play data from 2009 to 2018 from Kaggle](https://www.kaggle.com/maxhorowitz/nflplaybyplay2009to2016), and we are using betting data from Kaggle (link to data here) to contextualize the play-by-play data.
+<br>
+<br>
+The [extra point yard line was moved](http://www.nfl.com/news/story/0ap3000000493347/article/nfl-moves-extra-point-to-15yard-line-for-2015-season
+) from the 2-yardline to the 15-yardline in 2015 because the NFL wanted to increase the number of 2-point conversion attempts to boast ratings. We want to analyze how attempting more 2-point conversions, especially in the 4th quarter, can benefit teams.
+
+# Data Cleaning
+[Follow this link for using an open source Git extension to deal with versioning large files.](https://git-lfs.github.com/) This is how we were able to load the large play-by-play dataset.
+```{r}
+nfl_data <-  read_csv("NFLPlaybyPlay 2009-2018.csv")
+spread_data = read.csv("spreadspoke_scores.csv")
+spread_data$newdate <- strptime((spread_data$schedule_date), "%m/%d/%Y")
+spread_data$newdate = format(spread_data$newdate, "%Y-%m-%d")
+spread_data$newdate = as.Date(as.character(spread_data$newdate))
+
+spread_data$home_team_abbv <- ifelse(spread_data$team_home=="Arizona Cardinals", "ARI",
+                                     ifelse(spread_data$team_home=="Atlanta Falcons", "ATL", 
+                                            ifelse(spread_data$team_home=="Baltimore Ravens", "BAL",
+                                                   ifelse(spread_data$team_home=="Buffalo Bills", "BUF",
+                                                          ifelse(spread_data$team_home=="Carolina Panthers", "CAR",
+                              ifelse(spread_data$team_home=="Chicago Bears", "CHI",
+                                      ifelse(spread_data$team_home=="Cincinnati Bengals", "CIN",
+                                            ifelse(spread_data$team_home=="Cleveland Browns", "CLE",
+                                                   ifelse(spread_data$team_home=="Dallas Cowboys", "DAL",
+                                                          ifelse(spread_data$team_home=="Denver Broncos", "DEN", 
+                              ifelse(spread_data$team_home=="Detroit Lions", "DET",
+                                     ifelse(spread_data$team_home=="Green Bay Packers", "GB",
+                                            ifelse(spread_data$team_home=="Houston Texans", "HOU",
+                                                   ifelse(spread_data$team_home=="Indianapolis Colts", "IND",
+                              ifelse(spread_data$team_home=="Jacksonville Jaguars", "JAX",
+                                     ifelse(spread_data$team_home=="Kansas City Chiefs", "KC",
+                                            ifelse(spread_data$team_home=="Los Angeles Rams", "LA",
+                                                   ifelse(spread_data$team_home=="Los Angeles Chargers", "LAC",
+                              ifelse(spread_data$team_home=="Miami Dolphins", "MIA",
+                                     ifelse(spread_data$team_home=="Minnesota Vikings", "MIN",
+                                            ifelse(spread_data$team_home=="New England Patriots", "NE",
+                                                ifelse(spread_data$team_home=="New Orleans Saints", "NO",
+                              ifelse(spread_data$team_home=="New York Giants", "NYG",
+                                     ifelse(spread_data$team_home=="New York Jets", "NYJ",
+                                            ifelse(spread_data$team_home=="Oakland Raiders", "OAK",
+                                                   ifelse(spread_data$team_home=="Philadelphia Eagles", "PHI",
+                              ifelse(spread_data$team_home=="Pittsburgh Steelers", "PIT",
+                                     ifelse(spread_data$team_home=="San Diego Chargers", "SD",
+                                            ifelse(spread_data$team_home=="Seattle Seahawks", "SEA",
+                              ifelse(spread_data$team_home=="San Francisco 49ers", "SF",
+                                     ifelse(spread_data$team_home=="St. Louis Rams", "STL",
+                                            ifelse(spread_data$team_home=="Tampa Bay Buccaneers", "TB",
+                              ifelse(spread_data$team_home=="Tennessee Titans", "TEN",
+                                     ifelse(spread_data$team_home=="Washington Redskins", "WAS", "NA"
+                                            ))))))))))))))))))))))))))))))))))
+
+#Jacksonville's abbreviation changed from JAC to JAX in 2013
+nfl_data$home_team <- ifelse(nfl_data$home_team == "JAC", "JAX", nfl_data$home_team)
+
+colnames(spread_data)[19] <- "home_team"
+colnames(spread_data)[18] <- "game_date"
+glimpse(spread_data)
+
+nfl_data <- nfl_data %>% 
+                left_join(spread_data, by=c("game_date", "home_team"))
+
+post_td_plays <- nfl_data %>% 
+  select(play_id,
+         game_id,
+         home_team,
+         away_team,
+         posteam,
+         posteam_type,
+         defteam,
+         posteam_score,
+         defteam_score,
+         score_differential,
+         posteam_score_post,
+         defteam_score_post,
+         score_differential_post,
+         desc,
+         game_date,
+         qtr,
+         game_seconds_remaining,
+         play_type,
+         yards_gained,
+         contains("two_point"),
+         kicker_player_name,
+         kicker_player_id,
+         blocked_player_id,
+         blocked_player_name,
+         contains("extra_point"),
+         wp,
+         def_wp,
+         home_wp,
+         away_wp,
+         wpa,
+         home_wp_post,
+         away_wp_post,
+         ydsnet, 
+         ep, 
+         epa,
+         shotgun,
+         qb_dropback,
+         team_favorite_id, 
+         spread_favorite, 
+         over_under_line, 
+         stadium,
+         stadium_neutral, 
+         weather_temperature,
+         weather_wind_mph,
+         weather_humidity,
+         weather_detail, 
+         score_differential_post)%>% 
+  mutate(year = substr(game_id, 1, 4)) %>%
+  filter(extra_point_attempt == 1 | two_point_attempt == 1 | defensive_extra_point_attempt == 1 | defensive_two_point_attempt == 1)
+
+post_td_plays$home_team <- as.factor(as.character(post_td_plays$home_team))
+post_td_plays$away_team <- as.factor(as.character(post_td_plays$away_team))
+post_td_plays$team_favorite_id <- as.factor(as.character(post_td_plays$team_favorite_id))
+
+#Create one column that separates the types of extra point(s) try
+post_td_plays <- post_td_plays %>% 
+  mutate(extra_point_type = ifelse(extra_point_attempt == 1,
+                               "Kick", "Two-PointConversion"))
+
+#str(post_td_plays)
+post_td_plays$posteam <- as.factor(post_td_plays$posteam)
+post_td_plays$defteam <- as.factor(post_td_plays$defteam)
+post_td_plays$play_type <- as.factor(post_td_plays$play_type)
+post_td_plays$two_point_attempt <- as.factor(post_td_plays$two_point_attempt)
+post_td_plays$two_point_conv_result <- as.factor(post_td_plays$two_point_conv_result)
+post_td_plays$kicker_player_id <- as.factor(post_td_plays$kicker_player_id)
+post_td_plays$extra_point_attempt <- as.factor(post_td_plays$extra_point_attempt)
+post_td_plays$extra_point_result <- as.factor(post_td_plays$extra_point_result)
+post_td_plays$year <- as.factor(post_td_plays$year)
+post_td_plays$weather_humidity <- as.numeric(as.character(post_td_plays$weather_humidity))
+post_td_plays$extra_point_type <- as.factor(as.character(post_td_plays$extra_point_type))
+glimpse(post_td_plays)
+
+#Dropping the no_play play type from the data...it's all penalties
+post_td_plays <- post_td_plays %>% 
+  filter(play_type != "no_play")
+```
+
+```{r}
+# Ratio of XPT:2PT attempts
+post_td_plays %>% 
+  group_by(year, extra_point_attempt, two_point_attempt) %>% 
+  summarise(n = n())
+
+#Mean WPA change based on play type for post-touchdown 
+post_td_plays %>% 
+  group_by(play_type) %>% 
+  summarise(mean(wpa, na.rm = T))
+```
+
+# Data Visualization
+```{r}
+# 2-pt Conversion Distribution
+post_td_plays %>% 
+  filter(two_point_attempt == 1) %>% 
+  group_by(year, two_point_conv_result) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = year, y = n, group = two_point_conv_result)) +
+  geom_line(aes(color = two_point_conv_result)) +
+  geom_point(aes(color = two_point_conv_result)) +
+  annotate(geom="text", x='2016', y=49, label="2015: XPT moved from 2YL to 15YL", color="darkgray") +
+  labs(title="Plot of 2-pt Conversions in the NFL from 2009 to 2018",x="Year", y = "Count")
+
+# XPT Conversion Distribution
+post_td_plays %>% 
+  filter(extra_point_attempt == 1) %>% 
+  group_by(year, extra_point_result) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = year, y = n, group = extra_point_result)) +
+  geom_line(aes(color = extra_point_result)) +
+  geom_point(aes(color = extra_point_result)) +
+  annotate(geom="text", x='2016', y=1100, label="2015: XPT moved from 2YL to 15YL", color="darkgray") +
+  labs(title="Plot of Extra Points in the NFL from 2009 to 2018", x="Year", y = "Count")
+
+#Graph 4th quarter win probability changes based on type of extra point try
+post_td_plays %>% 
+  filter(qtr == 4) %>% 
+  ggplot(., aes(x=game_seconds_remaining, y=wpa, 
+                                 color=extra_point_type)) + geom_point() + scale_x_reverse() +
+  ggtitle("Win Probability Shifts in the 4th Quarter")
+
+#Graph 4th quarter, 7 minutes left win probability changes based on type of extra point try
+post_td_plays %>% 
+  filter(qtr == 4, game_seconds_remaining <= 420) %>% 
+  ggplot(., aes(x=game_seconds_remaining, y=wpa, 
+                color=extra_point_type)) + geom_point() + scale_x_reverse()  +
+  ggtitle("Win Probability Shifts in the last 7 min")
+```
+
+```{r}
+#Success Rate of Extra Points (2015 and forward)
+post_td_plays %>% 
+  filter(extra_point_type == "Kick",
+         year == "2015" | year == "2016" | year == "2017" | year == "2018") %>% 
+  summarise(Extra_Point_Success = mean(extra_point_result == "good"))
+
+#.9407 success rate
+
+#Success Rate of Two Points
+post_td_plays %>% 
+  filter(extra_point_type == "Two-PointConversion") %>% 
+  summarise(Two_Point_Success = mean(two_point_conv_result == "success"))
+#.47345 success rate
+```
+
+# Data Modeling
+```{r}
+# mod1 <- lm(wpa ~ posteam + defteam + score_differential + play_type + two_point_attempt + two_point_conv_result + kicker_player_id + extra_point_attempt + extra_point_result + year, data = post_td_plays)
+
+#Regression to see influential factors for two-point conversions specifcially
+#Just a test, planning to further develop
+lm_wpa <- post_td_plays %>%
+  filter(wpa>0) %>% 
+  lm(wpa ~ game_seconds_remaining + poly(score_differential, 2, raw=TRUE) + extra_point_type, data = .)
+
+summary(lm_wpa)
+
+```
+
+```{r}
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -15, extra_point_type = as.factor("Kick"))
+kick_down15 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -15, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down15 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -14, extra_point_type = as.factor("Kick"))
+kick_down14 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -14, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down14 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -13, extra_point_type = as.factor("Kick"))
+kick_down13 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -13, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down13 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -12, extra_point_type = as.factor("Kick"))
+kick_down12 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -12, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down12 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -11, extra_point_type = as.factor("Kick"))
+kick_down11 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -11, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down11 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -10, extra_point_type = as.factor("Kick"))
+kick_down10 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -10, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down10 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -9, extra_point_type = as.factor("Kick"))
+kick_down9 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -9, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down9 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -8, extra_point_type = as.factor("Kick"))
+kick_down8 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -8, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down8 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -7, extra_point_type = as.factor("Kick"))
+kick_down7 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -7, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down7 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -6, extra_point_type = as.factor("Kick"))
+kick_down6 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -6, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down6 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -5, extra_point_type = as.factor("Kick"))
+kick_down5 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -5, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down5 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -4, extra_point_type = as.factor("Kick"))
+kick_down4 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -4, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down4 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -3, extra_point_type = as.factor("Kick"))
+kick_down3 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -3, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down3 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -2, extra_point_type = as.factor("Kick"))
+kick_down2 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -2, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down2 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -1, extra_point_type = as.factor("Kick"))
+kick_down1 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = -1, extra_point_type = as.factor("Two-PointConversion"))
+twopt_down1 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 0, extra_point_type = as.factor("Kick"))
+kick_tied <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 0, extra_point_type = as.factor("Two-PointConversion"))
+twopt_tied <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#Winning
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 15, extra_point_type = as.factor("Kick"))
+kick_up15 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 15, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up15 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 14, extra_point_type = as.factor("Kick"))
+kick_up14 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 14, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up14 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 13, extra_point_type = as.factor("Kick"))
+kick_up13 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 13, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up13 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 12, extra_point_type = as.factor("Kick"))
+kick_up12 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 12, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up12 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 11, extra_point_type = as.factor("Kick"))
+kick_up11 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 11, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up11 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 10, extra_point_type = as.factor("Kick"))
+kick_up10 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 10, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up10 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 9, extra_point_type = as.factor("Kick"))
+kick_up9 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 9, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up9 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 8, extra_point_type = as.factor("Kick"))
+kick_up8 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 8, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up8 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 7, extra_point_type = as.factor("Kick"))
+kick_up7 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 7, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up7 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 12, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 6, extra_point_type = as.factor("Kick"))
+kick_up6 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 6, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up6 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 5, extra_point_type = as.factor("Kick"))
+kick_up5 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 5, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up5 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 4, extra_point_type = as.factor("Kick"))
+kick_up4 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 4, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up4 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 3, extra_point_type = as.factor("Kick"))
+kick_up3 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 3, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up3 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 2, extra_point_type = as.factor("Kick"))
+kick_up2 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 2, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up2 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point 
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 1, extra_point_type = as.factor("Kick"))
+kick_up1 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+#10 minutes left, down 15, est change in probability for extra point
+hypothetical_situation <- data.frame(game_seconds_remaining = 600, score_differential = 1, extra_point_type = as.factor("Two-PointConversion"))
+twopt_up1 <- predict(lm_wpa, newdata = hypothetical_situation)
+
+```
+
+```{r}
+#Merge Datasets
+kick_wps <- rbind(kick_down15, kick_down14, kick_down13, kick_down12, kick_down11, kick_down10, kick_down9, kick_down8, kick_down7, kick_down6, kick_down5, kick_down4, kick_down3, kick_down2, kick_down1, kick_tied, kick_up1, kick_up2, kick_up3, kick_up4, kick_up5, kick_up6, kick_up7, kick_up8, kick_up9, kick_up10, kick_up11, kick_up12, kick_up13,kick_up14, kick_up15)
+
+twopt_wps <- rbind(twopt_down15, twopt_down14, twopt_down13, twopt_down12, twopt_down11, twopt_down10,
+                   twopt_down9, twopt_down8, twopt_down7, twopt_down6, twopt_down5, twopt_down4,
+                   twopt_down3, twopt_down2, twopt_down1, twopt_tied, twopt_up1, twopt_up2, twopt_up3,
+                  twopt_up4, twopt_up5, twopt_up6, twopt_up7, twopt_up8, twopt_up9, twopt_up10, 
+                  twopt_up11, twopt_up12, twopt_up13, twopt_up14, twopt_up15)
+
+wp_shifts <- cbind.data.frame(kick_wps, twopt_wps)    
+
+row.names(wp_shifts) <- c("Down 15", "Down 14", "Down 13", "Down 12","Down 11", "Down 10",
+                          "Down 9", "Down 8", "Down 7", "Down 6","Down 5", "Down 4",
+                          "Down 3", "Down 2", "Down 1", "Tied","Up 1", "Up 2",
+                          "Up 3", "Up 4", "Up 5", "Up 6", "Up 7", "Up 8", "Up 9", "Up 10",
+                          "Up 11", "Up 12", "Up 13", "Up 14", "Up 15")
+
+names(wp_shifts) <- c("Kick", "Two-Point")
+
+print(wp_shifts)
+```
